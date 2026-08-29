@@ -1,15 +1,14 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 
 type Theme = "light" | "dark" | "system";
 
 interface ThemeContextType {
   theme: Theme;
   resolvedTheme: "light" | "dark";
-  isTransitioning: boolean;
   setTheme: (theme: "light" | "dark") => void;
-  toggleTheme: (coords?: { clientX: number; clientY: number }) => void;
+  toggleTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -17,9 +16,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("system");
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("dark");
-  const [isTransitioning, setIsTransitioning] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const isTransitioningRef = useRef(false);
 
   useEffect(() => {
     try {
@@ -62,102 +59,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     [applyThemeToDOM]
   );
 
-  const toggleTheme = useCallback(
-    (coords?: { clientX: number; clientY: number }) => {
-      // Interaction Lock: Prevent rapid double-toggle during active takeover
-      if (isTransitioningRef.current) return;
+  const toggleTheme = useCallback(() => {
+    const currentActive = document.documentElement.classList.contains("dark") ? "dark" : "light";
+    const nextTheme: "light" | "dark" = currentActive === "dark" ? "light" : "dark";
 
-      const currentActive = document.documentElement.classList.contains("dark") ? "dark" : "light";
-      const nextTheme: "light" | "dark" = currentActive === "dark" ? "light" : "dark";
-
-      const isReducedMotion =
-        typeof window !== "undefined" &&
-        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-      // When reduced motion is preferred: instantaneous theme switch
-      if (isReducedMotion || typeof window === "undefined" || typeof document === "undefined") {
-        setTheme(nextTheme);
-        return;
-      }
-
-      // Physics-Calibrated Theme Takeover Expansion
-      isTransitioningRef.current = true;
-      setIsTransitioning(true);
-
-      const originX = coords?.clientX ?? window.innerWidth / 2;
-      const originY = coords?.clientY ?? window.innerHeight / 2;
-
-      // Calculate maximum radius to furthest viewport corner + safety buffer
-      const maxRadius =
-        Math.ceil(
-          Math.hypot(
-            Math.max(originX, window.innerWidth - originX),
-            Math.max(originY, window.innerHeight - originY)
-          )
-        ) + 40;
-
-      const targetBg = nextTheme === "dark" ? "#0B0D0C" : "#F7F8F6";
-
-      // Create high-priority full-screen GPU takeover overlay
-      const overlay = document.createElement("div");
-      overlay.setAttribute("aria-hidden", "true");
-      overlay.style.position = "fixed";
-      overlay.style.inset = "0";
-      overlay.style.zIndex = "999999";
-      overlay.style.pointerEvents = "none";
-      overlay.style.backgroundColor = targetBg;
-      overlay.style.willChange = "clip-path";
-      overlay.style.clipPath = `circle(0px at ${originX}px ${originY}px)`;
-      document.body.appendChild(overlay);
-
-      // Expanding wave animation (540ms total duration with custom power-out curve)
-      const animation = overlay.animate(
-        [
-          { clipPath: `circle(0px at ${originX}px ${originY}px)` },
-          { clipPath: `circle(${maxRadius}px at ${originX}px ${originY}px)` },
-        ],
-        {
-          duration: 540,
-          easing: "cubic-bezier(0.22, 1, 0.36, 1)",
-          fill: "forwards",
-        }
-      );
-
-      // Flip DOM semantic tokens halfway through while the wave covers the screen
-      const switchTimer = setTimeout(() => {
-        applyThemeToDOM(nextTheme);
-        setThemeState(nextTheme);
-        setResolvedTheme(nextTheme);
-        try {
-          localStorage.setItem("sheetlens_theme", nextTheme);
-        } catch {}
-      }, 280);
-
-      animation.onfinish = () => {
-        clearTimeout(switchTimer);
-        applyThemeToDOM(nextTheme);
-        setThemeState(nextTheme);
-        setResolvedTheme(nextTheme);
-        try {
-          localStorage.setItem("sheetlens_theme", nextTheme);
-        } catch {}
-
-        // Seamless 70ms micro-fade out before unmounting
-        const fadeAnim = overlay.animate([{ opacity: 1 }, { opacity: 0 }], {
-          duration: 70,
-          easing: "ease-out",
-          fill: "forwards",
-        });
-
-        fadeAnim.onfinish = () => {
-          overlay.remove();
-          isTransitioningRef.current = false;
-          setIsTransitioning(false);
-        };
-      };
-    },
-    [applyThemeToDOM, setTheme]
-  );
+    setThemeState(nextTheme);
+    setResolvedTheme(nextTheme);
+    applyThemeToDOM(nextTheme);
+    try {
+      localStorage.setItem("sheetlens_theme", nextTheme);
+    } catch {}
+  }, [applyThemeToDOM]);
 
   // System listener active only if user has not explicitly set a preference
   useEffect(() => {
@@ -177,7 +89,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <ThemeContext.Provider
-      value={{ theme, resolvedTheme, isTransitioning, setTheme, toggleTheme }}
+      value={{ theme, resolvedTheme, setTheme, toggleTheme }}
     >
       {children}
     </ThemeContext.Provider>

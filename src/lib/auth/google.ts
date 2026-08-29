@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { NextRequest } from "next/server";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -16,18 +17,53 @@ const REQUIRED_SCOPES = [
   "https://www.googleapis.com/auth/spreadsheets",
 ];
 
-export function getBaseUrl(): string {
+/**
+ * Resolves the application base URL with dynamic request host inspection,
+ * environment configuration, and Vercel support.
+ */
+export function getBaseUrl(request?: Request | NextRequest): string {
+  // If request is provided, inspect HTTP headers for exact current origin
+  if (request) {
+    const forwardedHost = request.headers.get("x-forwarded-host");
+    const host = forwardedHost || request.headers.get("host");
+    if (host) {
+      const forwardedProto = request.headers.get("x-forwarded-proto");
+      const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
+      const proto = forwardedProto || (isLocalhost ? "http" : "https");
+      return `${proto}://${host}`.replace(/\/$/, "");
+    }
+    try {
+      const parsed = new URL(request.url);
+      return parsed.origin.replace(/\/$/, "");
+    } catch {}
+  }
+
+  // Check explicit environment configuration
   if (process.env.NEXT_PUBLIC_APP_URL) {
-    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
+    let url = process.env.NEXT_PUBLIC_APP_URL.trim().replace(/\/$/, "");
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      url = `https://${url}`;
+    }
+    return url;
   }
+
+  // Check Vercel default domain
   if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`;
+    let url = process.env.VERCEL_URL.trim().replace(/\/$/, "");
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      url = `https://${url}`;
+    }
+    return url;
   }
+
   return "http://localhost:3000";
 }
 
-export function getRedirectUri(): string {
-  return `${getBaseUrl()}/api/auth/google/callback`;
+/**
+ * Computes the exact OAuth redirect URI matching the active host
+ */
+export function getRedirectUri(request?: Request | NextRequest): string {
+  return `${getBaseUrl(request)}/api/auth/google/callback`;
 }
 
 // Generate secure random state and PKCE verifier/challenge
@@ -43,17 +79,23 @@ export function generatePKCE() {
 }
 
 /**
- * Builds the Google OAuth consent URL with full PKCE and offline access
+ * Builds the Google OAuth consent URL with full PKCE, offline access, and exact redirect URI
  */
-export function buildGoogleAuthUrl(state: string, codeChallenge: string): string {
+export function buildGoogleAuthUrl(
+  state: string,
+  codeChallenge: string,
+  redirectUri?: string
+): string {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   if (!clientId) {
     throw new Error("GOOGLE_CLIENT_ID environment variable is missing.");
   }
 
+  const effectiveRedirectUri = redirectUri || getRedirectUri();
+
   const params = new URLSearchParams({
     client_id: clientId,
-    redirect_uri: getRedirectUri(),
+    redirect_uri: effectiveRedirectUri,
     response_type: "code",
     scope: REQUIRED_SCOPES.join(" "),
     access_type: "offline",
@@ -87,7 +129,8 @@ export interface GoogleUserInfo {
  */
 export async function exchangeCodeForTokens(
   code: string,
-  codeVerifier: string
+  codeVerifier: string,
+  redirectUri?: string
 ): Promise<GoogleTokenResponse> {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -95,6 +138,8 @@ export async function exchangeCodeForTokens(
   if (!clientId || !clientSecret) {
     throw new Error("Google OAuth credentials missing in environment.");
   }
+
+  const effectiveRedirectUri = redirectUri || getRedirectUri();
 
   const response = await fetch(GOOGLE_TOKEN_URL, {
     method: "POST",
@@ -105,7 +150,7 @@ export async function exchangeCodeForTokens(
       code,
       client_id: clientId,
       client_secret: clientSecret,
-      redirect_uri: getRedirectUri(),
+      redirect_uri: effectiveRedirectUri,
       grant_type: "authorization_code",
       code_verifier: codeVerifier,
     }),
@@ -113,7 +158,7 @@ export async function exchangeCodeForTokens(
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to exchange code for tokens: ${errorText}`);
+    throw new Error(`Google token exchange failed: ${errorText}`);
   }
 
   return response.json();
@@ -130,7 +175,8 @@ export async function fetchGoogleUserInfo(accessToken: string): Promise<GoogleUs
   });
 
   if (!response.ok) {
-    throw new Error("Failed to fetch Google user profile.");
+    const errorText = await response.text();
+    throw new Error(`Failed to fetch Google user profile: ${errorText}`);
   }
 
   return response.json();

@@ -1,13 +1,19 @@
-import { NextResponse } from "next/server";
-import { clearSession } from "@/lib/auth/session";
+import { NextRequest, NextResponse } from "next/server";
+import { clearSession, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { getBaseUrl } from "@/lib/auth/google";
 
-export async function POST() {
+export const dynamic = "force-dynamic";
+
+export async function POST(request: NextRequest) {
   await clearSession();
-  return NextResponse.redirect(`${getBaseUrl()}/`, { status: 303 });
+  const response = NextResponse.redirect(`${getBaseUrl(request)}/`, { status: 303 });
+  response.cookies.delete(SESSION_COOKIE_NAME);
+  return response;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   await clearSession();
-  return NextResponse.redirect(`${getBaseUrl()}/`);
+  const response = NextResponse.redirect(`${getBaseUrl(request)}/`);
+  response.cookies.delete(SESSION_COOKIE_NAME);
+  return response;
 }

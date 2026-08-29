@@ -14,8 +14,16 @@ function getErrorMessage(code?: string): string | null {
       return "Google sign-in was cancelled. Please authorize permissions to continue.";
     case "state_mismatch":
       return "Security validation failed (state mismatch). Please try again.";
+    case "missing_oauth_cookie":
+      return "Authentication session expired or cookies blocked across redirect. Please try again.";
+    case "missing_code":
+    case "missing_state":
     case "missing_oauth_parameters":
       return "Invalid response received from Google authentication.";
+    case "token_exchange_failed":
+      return "Failed to exchange authorization code with Google. Please try again.";
+    case "profile_fetch_failed":
+      return "Failed to retrieve user profile from Google. Please try again.";
     case "auth_callback_failed":
       return "Unable to establish an authenticated session. Please try again.";
     default:

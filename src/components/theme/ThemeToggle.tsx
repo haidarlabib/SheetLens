@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { useTheme } from "./ThemeProvider";
 import { Sun, Moon } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
@@ -10,9 +10,8 @@ interface ThemeToggleProps {
 }
 
 export function ThemeToggle({ className }: ThemeToggleProps) {
-  const { resolvedTheme, isTransitioning, toggleTheme } = useTheme();
+  const { resolvedTheme, toggleTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -21,29 +20,15 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
   const isDark = mounted ? resolvedTheme === "dark" : false;
   const label = isDark ? "Switch to light mode" : "Switch to dark mode";
 
-  const handleToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (isTransitioning) return;
-
-    // Get exact physical center of the button for radial takeover origin
-    const rect = buttonRef.current?.getBoundingClientRect();
-    const clientX = rect ? rect.left + rect.width / 2 : e.clientX;
-    const clientY = rect ? rect.top + rect.height / 2 : e.clientY;
-
-    toggleTheme({ clientX, clientY });
-  };
-
   return (
     <button
-      ref={buttonRef}
       type="button"
-      onClick={handleToggle}
-      disabled={isTransitioning}
+      onClick={() => toggleTheme()}
       aria-label={label}
       title={label}
       className={cn(
         // Accessible 44px touch target container
-        "relative inline-flex items-center justify-center min-w-[44px] min-h-[44px] p-1.5 rounded-xl group focus-visible:outline-none",
-        isTransitioning ? "cursor-default" : "cursor-pointer",
+        "relative inline-flex items-center justify-center min-w-[44px] min-h-[44px] p-1.5 rounded-xl group focus-visible:outline-none cursor-pointer",
         className
       )}
     >
@@ -61,7 +46,7 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
           size={16}
           weight="bold"
           className={cn(
-            "absolute text-amber-500/90 dark:text-muted transition-all duration-400 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+            "absolute text-amber-500/90 dark:text-muted transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
             isDark
               ? "rotate-45 scale-0 opacity-0 pointer-events-none"
               : "rotate-0 scale-100 opacity-100"
@@ -73,7 +58,7 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
           size={15}
           weight="fill"
           className={cn(
-            "absolute text-emerald-400 dark:text-emerald-400 transition-all duration-400 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+            "absolute text-emerald-400 dark:text-emerald-400 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
             isDark
               ? "rotate-0 scale-100 opacity-100"
               : "-rotate-45 scale-0 opacity-0 pointer-events-none"

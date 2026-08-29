@@ -3,11 +3,11 @@ import { EncryptJWT, jwtDecrypt } from "jose";
 import { ConnectedSpreadsheet } from "@/lib/sheets/types";
 export { type ConnectedSpreadsheet } from "@/lib/sheets/types";
 
-const SESSION_COOKIE_NAME = "sheetlens_session";
-const OAUTH_STATE_COOKIE_NAME = "sheetlens_oauth_state";
+export const SESSION_COOKIE_NAME = "sheetlens_session";
+export const OAUTH_STATE_COOKIE_NAME = "sheetlens_oauth_state";
 
 // 30 days session duration
-const SESSION_MAX_AGE = 30 * 24 * 60 * 60;
+export const SESSION_MAX_AGE = 30 * 24 * 60 * 60;
 
 export interface SessionUser {
   id: string;
@@ -47,9 +47,9 @@ function getEncryptionKey(): Uint8Array {
 }
 
 /**
- * Encrypt and store session payload in HTTP-Only, Secure cookie
+ * Encrypts session payload into a signed, encrypted JWT token
  */
-export async function createSession(payload: SessionPayload): Promise<void> {
+export async function encryptSessionPayload(payload: SessionPayload): Promise<{ jwt: string; maxAge: number }> {
   const key = getEncryptionKey();
   const jwt = await new EncryptJWT({ ...payload })
     .setProtectedHeader({ alg: "dir", enc: "A256GCM" })
@@ -57,6 +57,14 @@ export async function createSession(payload: SessionPayload): Promise<void> {
     .setExpirationTime(`${SESSION_MAX_AGE}s`)
     .encrypt(key);
 
+  return { jwt, maxAge: SESSION_MAX_AGE };
+}
+
+/**
+ * Encrypt and store session payload in HTTP-Only, Secure cookie
+ */
+export async function createSession(payload: SessionPayload): Promise<void> {
+  const { jwt } = await encryptSessionPayload(payload);
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE_NAME, jwt, {
     httpOnly: true,
