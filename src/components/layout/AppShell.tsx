@@ -31,7 +31,7 @@ export function AppShell({
   const navItems = [
     { href: "/home", label: "Home", icon: House },
     { href: "/sheets", label: "Sheets", icon: Table },
-    { href: "/scan", label: "Scan", icon: Camera, isPrimary: true },
+    { href: "/scan", label: "Scan", icon: Camera },
     { href: "/analysis", label: "Analysis", icon: ChartBar },
   ];
 
@@ -138,43 +138,34 @@ export function AppShell({
       {/* MOBILE FIXED BOTTOM NAVIGATION BAR (< 768px) */}
       <nav
         aria-label="Mobile navigation"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface/90 backdrop-blur-2xl border-t border-border px-3 py-2 flex items-center justify-around pb-safe shadow-lg"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface/90 backdrop-blur-2xl border-t border-border px-2 py-1.5 flex items-center justify-around pb-safe shadow-lg"
       >
         {navItems.map((item) => {
           const isActive = pathname === item.href;
           const Icon = item.icon;
 
-          if (item.isPrimary) {
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="flex flex-col items-center justify-center relative -top-3 cursor-pointer group focus-visible:outline-none"
-              >
-                <div className="w-12 h-12 rounded-full bg-accent text-white flex items-center justify-center shadow-lg shadow-accent/25 transition-transform active:scale-95 group-hover:scale-105">
-                  <Camera size={22} weight="bold" />
-                </div>
-                <span className="text-[10px] font-mono mt-0.5 text-foreground font-semibold">
-                  Scan
-                </span>
-              </Link>
-            );
-          }
-
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl min-w-[56px] min-h-[44px] transition-colors ${
-                isActive ? "text-foreground font-semibold" : "text-muted"
+              className={`flex-1 flex flex-col items-center justify-center py-1.5 px-2 rounded-xl min-h-[48px] transition-colors focus-visible:outline-none ${
+                isActive
+                  ? "text-foreground font-semibold"
+                  : "text-muted hover:text-foreground"
               }`}
             >
               <Icon
                 size={20}
                 weight={isActive ? "fill" : "regular"}
-                className={isActive ? "text-accent" : ""}
+                className={`transition-colors ${
+                  isActive ? "text-accent" : "text-muted"
+                }`}
               />
-              <span className="text-[10.5px] font-mono mt-1 tracking-tight">
+              <span
+                className={`text-[10px] font-mono mt-1 tracking-tight transition-colors ${
+                  isActive ? "text-foreground font-bold" : "text-muted"
+                }`}
+              >
                 {item.label}
               </span>
             </Link>
