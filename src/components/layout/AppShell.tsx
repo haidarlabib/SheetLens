@@ -38,28 +38,29 @@ export function AppShell({
   return (
     <div className="relative min-h-[100dvh] flex flex-col justify-between overflow-x-hidden bg-background text-foreground transition-colors duration-200">
       {/* DESKTOP / TABLET TOP NAVIGATION BAR */}
-      <header className="sticky top-0 z-40 w-full border-b border-border bg-surface/80 backdrop-blur-xl">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          {/* Left: Brand Identity */}
-          <Link
-            href="/home"
-            className="flex items-center gap-2.5 group focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent rounded-lg"
-          >
-            <BrandMark size={22} />
-            <div className="flex items-center gap-2">
+      <header className="sticky top-0 z-40 w-full border-b border-border bg-surface/85 backdrop-blur-xl transition-colors duration-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-4">
+          {/* Left: Brand Identity & Active Dataset Pill */}
+          <div className="flex items-center gap-3 min-w-0">
+            <Link
+              href="/home"
+              className="flex items-center gap-2.5 group focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent rounded-lg shrink-0"
+            >
+              <BrandMark size={22} />
               <span className="font-bold tracking-tight text-foreground text-sm font-sans">
                 SheetLens
               </span>
-              {activeSpreadsheetTitle && (
-                <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-mono text-muted bg-surface-muted px-2 py-0.5 rounded-full border border-border truncate max-w-[140px]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-accent" />
-                  <span className="truncate">{activeSpreadsheetTitle}</span>
-                </span>
-              )}
-            </div>
-          </Link>
+            </Link>
 
-          {/* Center: Desktop Navigation Tabs */}
+            {activeSpreadsheetTitle && (
+              <div className="hidden sm:flex items-center gap-1.5 text-[11px] font-mono text-muted bg-surface-muted px-2.5 py-0.5 rounded-full border border-border truncate max-w-[200px] lg:max-w-[280px]">
+                <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0 animate-pulse" />
+                <span className="truncate">{activeSpreadsheetTitle}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Center: Desktop Navigation Segmented Pill */}
           <nav className="hidden md:flex items-center gap-1 bg-surface-inner p-1 rounded-full border border-border">
             {navItems.map((item) => {
               const isActive = pathname === item.href;
@@ -71,7 +72,7 @@ export function AppShell({
                   href={item.href}
                   className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all ${
                     isActive
-                      ? "bg-surface text-foreground shadow-xs font-semibold"
+                      ? "bg-surface text-foreground shadow-2xs font-semibold"
                       : "text-muted hover:text-foreground hover:bg-surface/50"
                   }`}
                 >
@@ -86,8 +87,8 @@ export function AppShell({
             })}
           </nav>
 
-          {/* Right: Theme Toggle & User Info */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          {/* Right: Theme Toggle & User Profile Controls */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <ThemeToggle />
 
             <div className="flex items-center gap-2 pl-1 border-l border-border">
@@ -121,17 +122,20 @@ export function AppShell({
       </header>
 
       {/* MAIN CONTENT CANVAS */}
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 py-6 pb-24 md:pb-12">
+      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 pb-24 md:pb-12">
         {children}
       </main>
 
-      {/* AUTHENTICATED APP QUIET FOOTER */}
-      <footer className="hidden md:flex w-full max-w-5xl mx-auto px-6 py-4 border-t border-border items-center justify-between text-[11px] font-mono text-muted">
-        <span>SheetLens · Visual Data Instrument</span>
+      {/* AUTHENTICATED DESKTOP FOOTER */}
+      <footer className="hidden md:flex w-full max-w-7xl mx-auto px-6 lg:px-8 py-4 border-t border-border items-center justify-between text-[11px] font-mono text-muted">
+        <div className="flex items-center gap-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+          <span>SheetLens · Visual Data Instrument</span>
+        </div>
         <span className="text-muted/80">Made by Izza</span>
       </footer>
 
-      {/* MOBILE FIXED BOTTOM NAVIGATION BAR */}
+      {/* MOBILE FIXED BOTTOM NAVIGATION BAR (< 768px) */}
       <nav
         aria-label="Mobile navigation"
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface/90 backdrop-blur-2xl border-t border-border px-3 py-2 flex items-center justify-around pb-safe shadow-lg"

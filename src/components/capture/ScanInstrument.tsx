@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -10,8 +10,15 @@ import {
   Sparkle,
   WarningCircle,
   Table,
+  ArrowSquareOut,
+  Hash,
+  Calendar,
+  Tag,
+  TextT,
+  CheckCircle,
+  Lightbulb,
 } from "@phosphor-icons/react";
-import { ConnectedSpreadsheet } from "@/lib/sheets/types";
+import { ConnectedSpreadsheet, InferredColumnType } from "@/lib/sheets/types";
 import { ExtractionResult } from "@/lib/gemini/types";
 import { compressAndResizeImage } from "@/lib/utils/image";
 import { ExtractionReview } from "./ExtractionReview";
@@ -23,6 +30,19 @@ interface ScanInstrumentProps {
 }
 
 type ScanStage = "idle" | "preview" | "processing" | "review";
+
+function ColumnTypeIcon({ type }: { type: InferredColumnType }) {
+  switch (type) {
+    case "number":
+      return <Hash size={11} className="text-emerald-500 shrink-0" />;
+    case "date":
+      return <Calendar size={11} className="text-sky-500 shrink-0" />;
+    case "category":
+      return <Tag size={11} className="text-amber-500 shrink-0" />;
+    default:
+      return <TextT size={11} className="text-muted shrink-0" />;
+  }
+}
 
 export function ScanInstrument({ connectedSheet }: ScanInstrumentProps) {
   const [stage, setStage] = useState<ScanStage>("idle");
@@ -40,12 +60,13 @@ export function ScanInstrument({ connectedSheet }: ScanInstrumentProps) {
   const [extractionResult, setExtractionResult] =
     useState<ExtractionResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Handle image capture or upload
-  const handleFileSelect = async (file: File) => {
+  const handleFileSelect = useCallback(async (file: File) => {
     setErrorMessage(null);
     try {
       // Compress and resize client-side
@@ -63,11 +84,30 @@ export function ScanInstrument({ connectedSheet }: ScanInstrumentProps) {
       console.error("Image processing error:", err);
       setErrorMessage("Unable to process the image. Please select a valid photo.");
     }
-  };
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      handleFileSelect(file);
+    }
+  };
+
+  // Drag and drop handlers for desktop
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith("image/")) {
       handleFileSelect(file);
     }
   };
@@ -130,7 +170,7 @@ export function ScanInstrument({ connectedSheet }: ScanInstrumentProps) {
 
   if (!connectedSheet) {
     return (
-      <div className="max-w-lg mx-auto py-8 text-left">
+      <div className="max-w-lg mx-auto py-8 text-left animate-in fade-in duration-200">
         <DoubleBezelCard glow className="border-dashed">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-7 h-7 rounded-lg bg-surface-muted border border-border flex items-center justify-center text-accent">
@@ -141,7 +181,7 @@ export function ScanInstrument({ connectedSheet }: ScanInstrumentProps) {
             </h1>
           </div>
           <p className="text-xs text-muted leading-relaxed mb-4">
-            Document extraction maps physical receipts and invoices into your specific spreadsheet columns. Please connect or create a spreadsheet before scanning.
+            Document extraction maps physical receipts and invoices directly into your specific spreadsheet columns. Please connect or create a spreadsheet before scanning.
           </p>
           <Link
             href="/sheets"
@@ -155,7 +195,7 @@ export function ScanInstrument({ connectedSheet }: ScanInstrumentProps) {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-4 text-left animate-in fade-in duration-200">
+    <div className="space-y-6 text-left animate-in fade-in duration-200">
       {/* Hidden File Inputs */}
       <input
         ref={cameraInputRef}
@@ -173,23 +213,6 @@ export function ScanInstrument({ connectedSheet }: ScanInstrumentProps) {
         onChange={handleInputChange}
       />
 
-      {/* Top Instrument Status Strip */}
-      <div className="flex items-center justify-between px-1">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-          <span className="text-xs font-mono font-bold text-foreground">
-            {connectedSheet.spreadsheetTitle}
-          </span>
-          <span className="text-[10px] font-mono text-muted bg-surface px-1.5 py-0.5 rounded border border-border">
-            {connectedSheet.sheetTitle}
-          </span>
-        </div>
-
-        <span className="text-[10.5px] font-mono text-muted">
-          {connectedSheet.headers.length} Target Columns
-        </span>
-      </div>
-
       {/* Error Alert */}
       {errorMessage && (
         <div
@@ -201,119 +224,227 @@ export function ScanInstrument({ connectedSheet }: ScanInstrumentProps) {
         </div>
       )}
 
-      {/* Main Viewport depending on stage */}
-      {stage === "idle" && (
-        <DoubleBezelCard glow className="p-6 sm:p-8 flex flex-col items-center justify-center text-center">
-          {/* Optical Document Framing Reticle */}
-          <div className="relative w-full max-w-sm aspect-[4/3] rounded-2xl bg-surface-inner border border-dashed border-border flex flex-col items-center justify-center p-6 mb-6">
-            {/* 4 Optical Framing Corners */}
-            <div className="absolute top-3 left-3 w-4 h-4 border-t-2 border-l-2 border-accent rounded-tl-sm" />
-            <div className="absolute top-3 right-3 w-4 h-4 border-t-2 border-r-2 border-accent rounded-tr-sm" />
-            <div className="absolute bottom-3 left-3 w-4 h-4 border-b-2 border-l-2 border-accent rounded-bl-sm" />
-            <div className="absolute bottom-3 right-3 w-4 h-4 border-b-2 border-r-2 border-accent rounded-br-sm" />
+      {/* DESKTOP SPLIT WORKSPACE: 8 COLS (CAPTURE INSTRUMENT) / 4 COLS (SCHEMA & CONTEXT) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        {/* LEFT / MAIN CAPTURE AREA (lg:col-span-8) */}
+        <div className="lg:col-span-8 space-y-4">
+          {stage === "idle" && (
+            <DoubleBezelCard glow className="p-6 sm:p-8">
+              {/* Optical Document Viewfinder with Dropzone */}
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`relative w-full aspect-[4/3] sm:aspect-[16/10] rounded-2xl border transition-all duration-200 flex flex-col items-center justify-center p-6 mb-6 overflow-hidden ${
+                  isDragOver
+                    ? "bg-accent/10 border-accent scale-[1.01]"
+                    : "bg-surface-inner border-dashed border-border hover:border-border-strong"
+                }`}
+              >
+                {/* 4 Precision Optical Corner Reticles */}
+                <div className="absolute top-4 left-4 w-5 h-5 border-t-2 border-l-2 border-accent rounded-tl-sm" />
+                <div className="absolute top-4 right-4 w-5 h-5 border-t-2 border-r-2 border-accent rounded-tr-sm" />
+                <div className="absolute bottom-4 left-4 w-5 h-5 border-b-2 border-l-2 border-accent rounded-bl-sm" />
+                <div className="absolute bottom-4 right-4 w-5 h-5 border-b-2 border-r-2 border-accent rounded-br-sm" />
 
-            <div className="w-12 h-12 rounded-2xl bg-surface-muted border border-border flex items-center justify-center text-accent mb-3 shadow-xs">
-              <Camera size={24} weight="bold" />
-            </div>
+                {/* Subtle Scanning Beam Animation */}
+                <div className="absolute inset-x-4 top-0 h-1 bg-gradient-to-r from-transparent via-accent/40 to-transparent animate-[pulse_3s_ease-in-out_infinite]" />
 
-            <div className="text-xs font-semibold text-foreground mb-1">
-              Align physical document inside frame
-            </div>
-            <div className="text-[11px] font-mono text-muted max-w-[200px]">
-              Receipts · Invoices · Delivery Notes
-            </div>
-          </div>
+                <div className="w-14 h-14 rounded-2xl bg-surface border border-border flex items-center justify-center text-accent mb-3 shadow-sm">
+                  <Camera size={28} weight="bold" />
+                </div>
 
-          {/* Dual Action Controls: Mobile Camera or File Picker */}
-          <div className="w-full max-w-sm grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            <button
-              type="button"
-              onClick={() => cameraInputRef.current?.click()}
-              className="py-3.5 px-4 rounded-xl bg-foreground text-background text-xs font-semibold hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-            >
-              <Camera size={16} weight="bold" className="text-accent" />
-              <span>Capture Photo</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="py-3 px-4 rounded-xl bg-surface hover:bg-border border border-border text-foreground text-xs font-semibold active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <UploadSimple size={16} />
-              <span>Upload Image</span>
-            </button>
-          </div>
-        </DoubleBezelCard>
-      )}
-
-      {stage === "preview" && previewUrl && (
-        <DoubleBezelCard glow className="p-4 sm:p-5 space-y-4">
-          {/* Image Inspection View */}
-          <div className="relative w-full aspect-[4/3] rounded-2xl bg-surface-inner border border-border overflow-hidden flex items-center justify-center">
-            <Image
-              src={previewUrl}
-              alt="Document Preview"
-              fill
-              className="object-contain p-2"
-              unoptimized
-            />
-
-            {imageMeta && (
-              <div className="absolute bottom-3 left-3 px-2 py-1 rounded-md bg-black/70 backdrop-blur-md text-[10px] font-mono text-white/90 border border-white/10">
-                {imageMeta.width} × {imageMeta.height} · {imageMeta.sizeKb} KB
+                <div className="text-sm font-semibold text-foreground font-sans mb-1 text-center">
+                  Align physical document inside frame
+                </div>
+                <div className="text-xs font-mono text-muted max-w-xs text-center">
+                  Receipts · Invoices · Delivery Notes · Paper Slips
+                </div>
+                <div className="text-[11px] font-mono text-accent/90 mt-2 hidden sm:block">
+                  Drag & drop an image or use the buttons below
+                </div>
               </div>
-            )}
-          </div>
 
-          {/* Action Bar */}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleReset}
-              className="py-3 px-4 rounded-xl bg-surface hover:bg-border border border-border text-foreground text-xs font-semibold active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <ArrowCounterClockwise size={14} />
-              <span>Retake</span>
-            </button>
+              {/* Dual Action Triggers */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md mx-auto">
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="py-3.5 px-4 rounded-xl bg-foreground text-background text-xs font-semibold hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                >
+                  <Camera size={16} weight="bold" className="text-accent" />
+                  <span>Capture Photo</span>
+                </button>
 
-            <button
-              type="button"
-              onClick={handleExtract}
-              className="flex-1 py-3 px-4 rounded-xl bg-foreground text-background text-xs font-semibold hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-            >
-              <Sparkle size={15} weight="fill" className="text-accent" />
-              <span>Extract Document Data</span>
-            </button>
-          </div>
-        </DoubleBezelCard>
-      )}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="py-3.5 px-4 rounded-xl bg-surface hover:bg-border border border-border text-foreground text-xs font-semibold active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <UploadSimple size={16} />
+                  <span>Upload Image</span>
+                </button>
+              </div>
+            </DoubleBezelCard>
+          )}
 
-      {stage === "processing" && (
-        <DoubleBezelCard glow className="py-16 flex flex-col items-center justify-center text-center space-y-4">
-          <LdrsLoader variant="quantum" size={42} label="Processing document" />
+          {stage === "preview" && previewUrl && (
+            <DoubleBezelCard glow className="p-4 sm:p-6 space-y-4">
+              {/* Document Image Inspection Frame */}
+              <div className="relative w-full aspect-[4/3] sm:aspect-[16/10] rounded-2xl bg-surface-inner border border-border overflow-hidden flex items-center justify-center">
+                <Image
+                  src={previewUrl}
+                  alt="Document Preview"
+                  fill
+                  className="object-contain p-3"
+                  unoptimized
+                />
 
-          <div className="space-y-1">
-            <div className="text-sm font-semibold text-foreground">
-              {processingStage === "reading" && "Reading Document with Gemini Vision..."}
-              {processingStage === "mapping" && "Mapping Fields to Spreadsheet Columns..."}
-              {processingStage === "validating" && "Verifying Dynamic Schema Values..."}
+                {imageMeta && (
+                  <div className="absolute bottom-4 left-4 px-2.5 py-1 rounded-lg bg-black/75 backdrop-blur-md text-[10.5px] font-mono text-white/95 border border-white/10 shadow-sm">
+                    {imageMeta.width} × {imageMeta.height} px · {imageMeta.sizeKb} KB
+                  </div>
+                )}
+              </div>
+
+              {/* Action Toolbar */}
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="py-3 px-4 rounded-xl bg-surface hover:bg-border border border-border text-foreground text-xs font-semibold active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <ArrowCounterClockwise size={14} />
+                  <span>Retake</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExtract}
+                  className="flex-1 py-3 px-4 rounded-xl bg-foreground text-background text-xs font-semibold hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                >
+                  <Sparkle size={15} weight="fill" className="text-accent" />
+                  <span>Extract Document Data (Gemini Vision)</span>
+                </button>
+              </div>
+            </DoubleBezelCard>
+          )}
+
+          {stage === "processing" && (
+            <DoubleBezelCard glow className="py-20 flex flex-col items-center justify-center text-center space-y-4">
+              <LdrsLoader variant="quantum" size={44} label="Processing document" />
+
+              <div className="space-y-1.5 max-w-sm">
+                <div className="text-sm font-semibold text-foreground font-sans">
+                  {processingStage === "reading" && "Reading Document with Gemini Vision..."}
+                  {processingStage === "mapping" && "Mapping Fields to Spreadsheet Columns..."}
+                  {processingStage === "validating" && "Verifying Dynamic Schema Values..."}
+                </div>
+                <div className="text-xs font-mono text-muted">
+                  Mapping directly into: {connectedSheet.headers.map((h) => h.name).join(" · ")}
+                </div>
+              </div>
+            </DoubleBezelCard>
+          )}
+
+          {stage === "review" && extractionResult && previewUrl && (
+            <ExtractionReview
+              imagePreviewUrl={previewUrl}
+              extractionResult={extractionResult}
+              onScanAnother={handleReset}
+              onRetryExtraction={handleExtract}
+            />
+          )}
+        </div>
+
+        {/* RIGHT / CONTEXT & TARGET SCHEMA SIDEBAR (lg:col-span-4) */}
+        <div className="lg:col-span-4 space-y-4">
+          {/* Target Spreadsheet Identity */}
+          <DoubleBezelCard className="space-y-3">
+            <div className="flex items-center justify-between border-b border-border pb-2.5">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-accent animate-pulse shrink-0" />
+                <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-foreground truncate">
+                  Target Spreadsheet
+                </h2>
+              </div>
+
+              <a
+                href={connectedSheet.spreadsheetUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open in Google Sheets"
+                className="p-1 rounded-md text-muted hover:text-foreground transition-colors shrink-0"
+              >
+                <ArrowSquareOut size={13} />
+              </a>
             </div>
-            <div className="text-xs font-mono text-muted">
-              Targeting: {connectedSheet.headers.map((h) => h.name).join(" · ")}
-            </div>
-          </div>
-        </DoubleBezelCard>
-      )}
 
-      {stage === "review" && extractionResult && previewUrl && (
-        <ExtractionReview
-          imagePreviewUrl={previewUrl}
-          extractionResult={extractionResult}
-          onScanAnother={handleReset}
-          onRetryExtraction={handleExtract}
-        />
-      )}
+            <div className="space-y-1.5 text-xs font-mono">
+              <div className="text-foreground font-semibold truncate">
+                {connectedSheet.spreadsheetTitle}
+              </div>
+              <div className="text-muted text-[11px] flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span>Tab: {connectedSheet.sheetTitle}</span>
+              </div>
+            </div>
+
+            {/* Target Columns Mapping Pill List */}
+            <div className="border-t border-border pt-3 space-y-2">
+              <div className="text-[10.5px] font-mono text-muted uppercase">
+                Schema Target Columns ({connectedSheet.headers.length})
+              </div>
+
+              <div className="space-y-1.5 max-h-[38vh] overflow-y-auto pr-1">
+                {connectedSheet.headers.map((h, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between p-2 rounded-lg bg-surface-inner border border-border text-xs font-mono"
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="w-4.5 h-4.5 rounded bg-surface-muted border border-border text-[9.5px] font-bold text-muted flex items-center justify-center shrink-0">
+                        {h.letter || String.fromCharCode(65 + idx)}
+                      </span>
+                      <span className="text-foreground truncate max-w-[160px]">
+                        {h.name}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 text-[10px] text-muted">
+                      <CheckCircle size={12} weight="fill" className="text-emerald-500" />
+                      <span>Ready</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </DoubleBezelCard>
+
+          {/* Precision Capture Tips */}
+          <DoubleBezelCard className="space-y-2.5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+              <Lightbulb size={14} className="text-amber-500" />
+              <span>Capture Quality Tips</span>
+            </div>
+
+            <ul className="text-[11px] font-mono text-muted space-y-1.5">
+              <li className="flex items-start gap-1.5">
+                <CheckCircle size={12} weight="fill" className="text-emerald-500 shrink-0 mt-0.5" />
+                <span>Place receipt on a flat surface with high contrast.</span>
+              </li>
+              <li className="flex items-start gap-1.5">
+                <CheckCircle size={12} weight="fill" className="text-emerald-500 shrink-0 mt-0.5" />
+                <span>Ensure line items and totals are well-lit and legible.</span>
+              </li>
+              <li className="flex items-start gap-1.5">
+                <CheckCircle size={12} weight="fill" className="text-emerald-500 shrink-0 mt-0.5" />
+                <span>Gemini automatically maps keys to your spreadsheet headers.</span>
+              </li>
+            </ul>
+          </DoubleBezelCard>
+        </div>
+      </div>
     </div>
   );
 }
