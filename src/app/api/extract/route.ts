@@ -96,9 +96,29 @@ export async function POST(request: NextRequest) {
       data: result,
     });
   } catch (err: unknown) {
-    console.error("Extraction route handler error:", err);
-    const message =
-      err instanceof Error ? err.message : "Document extraction failed.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("[Document Extraction API]", err);
+    let message = "Document extraction failed. Please try again with a clear photo.";
+    let status = 500;
+
+    if (err instanceof Error) {
+      if (err.message.startsWith("INVALID_API_KEY")) {
+        message = "Gemini API key is invalid or unauthorized. Please verify your GEMINI_API_KEY.";
+        status = 401;
+      } else if (err.message.startsWith("QUOTA_ERROR")) {
+        message = "Gemini API rate limit reached. Please wait a moment and try again.";
+        status = 429;
+      } else if (err.message.startsWith("IMAGE_PAYLOAD_ERROR")) {
+        message = "Image format not supported or corrupted. Please upload a clear JPG, PNG, or WebP photo.";
+        status = 400;
+      } else if (err.message.startsWith("GEMINI_SERVICE_UNAVAILABLE")) {
+        message = "Gemini AI service is temporarily experiencing high traffic. Please retry in a few seconds.";
+        status = 503;
+      } else if (err.message.startsWith("MODEL_NOT_FOUND")) {
+        message = "The configured Gemini Vision model is not available for this API key.";
+        status = 500;
+      }
+    }
+
+    return NextResponse.json({ error: message }, { status });
   }
 }

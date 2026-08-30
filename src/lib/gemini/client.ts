@@ -6,6 +6,29 @@ import {
 } from "./types";
 
 /**
+ * Maps deprecated or retired Gemini model IDs to active stable Developer API models
+ */
+function resolveModelName(configuredModel?: string): string {
+  const deprecatedMap: Record<string, string> = {
+    "gemini-2.5-flash": "gemini-3.5-flash",
+    "gemini-2.5-flash-lite": "gemini-3.5-flash-lite",
+    "gemini-2.0-flash": "gemini-3.5-flash",
+    "gemini-2.0-flash-lite": "gemini-3.5-flash-lite",
+    "gemini-1.5-flash": "gemini-3.5-flash",
+    "gemini-1.5-flash-8b": "gemini-3.5-flash-lite",
+    "gemini-1.5-pro": "gemini-3.5-flash",
+    "gemini-pro-vision": "gemini-3.5-flash",
+  };
+
+  if (!configuredModel || !configuredModel.trim()) {
+    return "gemini-3.5-flash";
+  }
+
+  const clean = configuredModel.trim();
+  return deprecatedMap[clean] || clean;
+}
+
+/**
  * Standardizes raw values from model into clean ExtractedFieldValue with confidence status
  */
 function normalizeFieldValue(
@@ -66,11 +89,18 @@ export async function extractDocumentData(
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error(
-      "GEMINI_API_KEY is not configured on the server. Please add your Gemini API key to .env.local."
+      "GEMINI_API_KEY is not configured on the server. Please add your Gemini API key to .env.local or Vercel Environment Variables."
     );
   }
 
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const primaryModel = resolveModelName(process.env.GEMINI_MODEL);
+  // Candidate fallback list to guarantee high availability
+  const candidateModels = [
+    primaryModel,
+    primaryModel !== "gemini-3.5-flash" ? "gemini-3.5-flash" : "gemini-3.6-flash",
+    "gemini-3.5-flash-lite",
+  ].filter((m, i, arr) => arr.indexOf(m) === i);
+
   const { imageBase64, mimeType, columns, sheetTitle = "Default Sheet" } = request;
 
   if (!columns || columns.length === 0) {
@@ -97,10 +127,6 @@ STRICT EXTRACTION RULES:
     columns
   )}. Return JSON with {"rows": [...]}.`;
 
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-    model
-  )}:generateContent?key=${apiKey}`;
-
   const payload = {
     contents: [
       {
@@ -125,31 +151,77 @@ STRICT EXTRACTION RULES:
     },
   };
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
+  let lastError: Error | null = null;
+  let responseData: any = null;
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("Gemini API error response:", response.status, errorText);
-    if (response.status === 400) {
-      throw new Error("Invalid image format or request sent to Gemini.");
+  // Try configured model, with automatic fallback if retired/unavailable
+  for (const model of candidateModels) {
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+      model
+    )}:generateContent?key=${apiKey}`;
+
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (response.ok) {
+        responseData = await response.json();
+        break; // Success! Exit model candidate loop
+      }
+
+      const errorText = await response.text();
+      let errorJson: { error?: { code?: number; message?: string; status?: string } } | null = null;
+      try {
+        errorJson = JSON.parse(errorText);
+      } catch {}
+
+      const errorMsg = errorJson?.error?.message || errorText;
+      console.error(
+        `[Gemini API] Request failed for model "${model}" - Status: ${response.status}, Code: ${errorJson?.error?.status || "UNKNOWN"}, Detail:`,
+        errorMsg
+      );
+
+      if (response.status === 404) {
+        lastError = new Error(`MODEL_NOT_FOUND: Model "${model}" is not available. Please verify GEMINI_MODEL.`);
+        continue; // Try fallback model
+      }
+
+      if (response.status === 503) {
+        lastError = new Error("GEMINI_SERVICE_UNAVAILABLE: Gemini service is currently experiencing temporary high demand.");
+        continue; // Try fallback model
+      }
+
+      if (response.status === 400) {
+        throw new Error("IMAGE_PAYLOAD_ERROR: Invalid image format or corrupt payload sent to Gemini.");
+      }
+
+      if (response.status === 403 || response.status === 401) {
+        throw new Error("INVALID_API_KEY: Gemini API authentication failed. Please verify your GEMINI_API_KEY.");
+      }
+
+      if (response.status === 429) {
+        throw new Error("QUOTA_ERROR: Gemini API rate limit or quota exceeded. Please try again in a moment.");
+      }
+
+      lastError = new Error(`GEMINI_ERROR (${response.status}): ${errorMsg}`);
+    } catch (fetchErr: unknown) {
+      if (fetchErr instanceof Error && (fetchErr.message.startsWith("IMAGE_PAYLOAD_ERROR") || fetchErr.message.startsWith("INVALID_API_KEY") || fetchErr.message.startsWith("QUOTA_ERROR"))) {
+        throw fetchErr;
+      }
+      lastError = fetchErr instanceof Error ? fetchErr : new Error("Network error connecting to Gemini API.");
     }
-    if (response.status === 403 || response.status === 401) {
-      throw new Error("Gemini API authentication failed. Please verify your GEMINI_API_KEY.");
-    }
-    if (response.status === 429) {
-      throw new Error("Gemini API rate limit exceeded. Please wait a moment and try again.");
-    }
-    throw new Error(`Gemini Vision extraction failed (${response.status}).`);
   }
 
-  const data = await response.json();
-  const rawContent = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!responseData) {
+    throw lastError || new Error("Document extraction failed across available Gemini models.");
+  }
+
+  const rawContent = responseData.candidates?.[0]?.content?.parts?.[0]?.text;
 
   if (!rawContent) {
     throw new Error("Gemini did not return any content for this document.");
